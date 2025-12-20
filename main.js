@@ -313,34 +313,39 @@ function renderScene2() {
         .data(top)
         .join("rect")
         .attr("class", "comp-bar")
-        .attr("x", d => d.value < 0 ? x(d.value) : x0)
+        .attr("x", x0)
         .attr("y", d => y(d.pathway))
-        .attr("width", d => Math.abs(x(d.value) - x0))
+        .attr("width", 0) // Start from 0
         .attr("height", y.bandwidth())
         .attr("rx", 8)
         .attr("ry", 8)
         .attr("fill", d => {
-          const isHighlight = Math.abs(d.value) === maxAbs;
-          if (isHighlight) return "rgba(120, 210, 210, 0.65)";
-          return "rgba(120, 210, 210, 0.30)";
+            const isHighlight = Math.abs(d.value) === maxAbs;
+            if (isHighlight) return "rgba(120, 210, 210, 0.65)";
+            return "rgba(120, 210, 210, 0.30)";
         })
         .attr("stroke", d => {
-          const isHighlight = Math.abs(d.value) === maxAbs;
-          if (isHighlight) return "rgba(120, 210, 210, 0.55)";
-          return "rgba(120, 210, 210, 0.20)";
+            const isHighlight = Math.abs(d.value) === maxAbs;
+            if (isHighlight) return "rgba(120, 210, 210, 0.55)";
+            return "rgba(120, 210, 210, 0.20)";
         })
         .attr("stroke-width", 1)
         .on("mousemove", (event, d) => {
-          tip
+            tip
             .style("opacity", 1)
             .style("left", `${event.clientX + 12}px`)
             .style("top", `${event.clientY - 12}px`)
             .html(
-              `<strong>${humanizeKey(d.pathway)}</strong><br/>` +
-              `National value: ${fmtMoney(d.value)}`
+                `<strong>${humanizeKey(d.pathway)}</strong><br/>` +
+                `National value: ${fmtMoney(d.value)}`
             );
         })
-        .on("mouseleave", () => tip.style("opacity", 0));
+        .on("mouseleave", () => tip.style("opacity", 0))
+        .transition()
+        .duration(900)
+        .delay((d, i) => i * 60)
+        .attr("x", d => d.value < 0 ? x(d.value) : x0)
+        .attr("width", d => Math.abs(x(d.value) - x0));
 
       // pathway labels (left)
       g.selectAll("text.comp-label")
@@ -369,8 +374,37 @@ function renderScene2() {
         .text(d => fmtMoney(d.value));
     }
 
-    draw();
-    window.addEventListener("resize", draw);
+    // Tambahkan flag agar tidak animasi dua kali
+    let scene2Animated = false;
+
+    function animateScene2() {
+      if (scene2Animated) return;
+      scene2Animated = true;
+      draw();
+    }
+
+    // Ganti window.addEventListener("resize", draw); menjadi:
+    window.addEventListener("resize", () => {
+      scene2Animated = false;
+      draw();
+    });
+
+    // Jangan panggil draw() langsung di sini!
+    // draw();
+
+    // Di luar renderScene2, setelah setupScrollReveal():
+    setupScrollReveal();
+
+    const scene2Section = document.getElementById("scene-2");
+    const observer2 = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          animateScene2();
+          observer2.unobserve(entry.target); // animasi hanya sekali
+        }
+      }
+    }, { threshold: 0.18 });
+    observer2.observe(scene2Section);
   });
 }
 
@@ -443,7 +477,35 @@ function renderScene3() {
 
     draw(combined);
 
-    window.addEventListener("resize", () => draw(combined));
+    // Tambahkan flag agar tidak animasi dua kali
+    let scene3Animated = false;
+
+    function animateScene3() {
+    if (scene3Animated) return;
+    scene3Animated = true;
+    draw(combined);
+    }
+
+    // Responsive: reset flag agar animasi bisa muncul lagi saat resize
+    window.addEventListener("resize", () => {
+    scene3Animated = false;
+    draw(combined); // Atau bisa dikosongkan bar-nya jika ingin animasi ulang
+    });
+
+    // Jangan panggil draw(combined) langsung di sini!
+    // draw(combined);
+
+    // IntersectionObserver untuk scene 3
+    const scene3Section = document.getElementById("scene-3");
+    const observer3 = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+        if (entry.isIntersecting) {
+        animateScene3();
+        observer3.unobserve(entry.target); // animasi hanya sekali
+        }
+    }
+    }, { threshold: 0.18 });
+    observer3.observe(scene3Section);
 
     function draw(rows) {
       const { width, height } = size();
@@ -474,10 +536,14 @@ function renderScene3() {
         .attr("class", d => top.includes(d) ? "rank-bar" : "rank-bar low")
         .attr("x", 0)
         .attr("y", d => y(d.name))
-        .attr("width", d => x(d.value))
+        .attr("width", 0) // Start from 0
         .attr("height", y.bandwidth())
         .attr("rx", 6)
-        .attr("ry", 6);
+        .attr("ry", 6)
+        .transition()
+        .duration(900)
+        .delay((d, i) => i * 60)
+        .attr("width", d => x(d.value));
 
       // Labels
       g.selectAll("text.rank-label")
