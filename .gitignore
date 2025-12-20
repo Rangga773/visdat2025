@@ -1,0 +1,7 @@
+# Large geo files
+data/small_areas_full.geojson
+*.geojson.zip
+*.zip
+
+# Colab / notebook junk
+.ipynb_checkpoints/
