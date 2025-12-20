@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Quiet Streets, Better Lives</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<section id="scene-map" class="reveal">
+  <div class="text stagger">
+    <h1>Quiet Streets, Better Lives</h1>
+    <p>
+      Economic value from climate action can be local, measurable, and surprisingly large.
+      This view shows Local Authorities as tiles, not a literal map.
+    </p>
+  </div>
+
+  <div id="map-container" class="reveal">
+    <svg id="map"></svg>
+    <div id="tooltip"></div>
+  </div>
+</section>
+<section id="scene-2" class="reveal">
+  <div class="text">
+    <h2>What drives the economic value</h2>
+    <p>
+      The gains are not abstract. They come from concrete pathways,
+      like reduced damage, fewer incidents, and healthier environments.
+    </p>
+  </div>
+
+  <div id="comp-container">
+    <svg id="comp"></svg>
+    <div id="comp-note"></div>
+  </div>
+</section>
+<section id="scene-3" class="reveal">
+  <div class="text">
+    <h2>Who benefits the most</h2>
+    <p>
+      Quiet streets do not benefit everyone equally.
+      Some places gain far more than others.
+    </p>
+  </div>
+
+  <div id="rank-container">
+    <svg id="rank"></svg>
+    <div id="rank-note"></div>
+  </div>
+</section>
+
+<section id="scene-4" class="reveal">
+  <div class="text">
+    <h2>Better lives, every day</h2>
+    <p>
+      Quiet streets are not just a climate story.
+      They show up in daily life: sleep, comfort, and time.
+    </p>
+  </div>
+
+  <div id="cards" class="stagger">
+    <div class="card" id="card-sleep">
+      <div class="kpi-title">Better sleep</div>
+      <div class="kpi-value" id="kpi-sleep">—</div>
+      <div class="kpi-sub" id="kpi-sleep-sub">—</div>
+    </div>
+
+    <div class="card" id="card-amenity">
+      <div class="kpi-title">More liveable places</div>
+      <div class="kpi-value" id="kpi-amenity">—</div>
+      <div class="kpi-sub" id="kpi-amenity-sub">—</div>
+    </div>
+
+    <div class="card" id="card-time">
+      <div class="kpi-title">Time back</div>
+      <div class="kpi-value" id="kpi-time">—</div>
+      <div class="kpi-sub" id="kpi-time-sub">—</div>
+    </div>
+  </div>
+</section>
+
+<section id="scene-5" class="reveal">
+  <div class="final-wrap">
+    <h2>Quiet streets are an investment in better lives</h2>
+
+    <div class="final-kpis stagger">
+      <div class="final-kpi">
+        <div class="final-value" id="final-total">—</div>
+        <div class="final-label">Total national economic value</div>
+      </div>
+
+      <div class="final-kpi">
+        <div class="final-value" id="final-health">—</div>
+        <div class="final-label">Driven by health & wellbeing</div>
+      </div>
+
+      <div class="final-kpi">
+        <div class="final-value" id="final-places">—</div>
+        <div class="final-label">Local Authorities benefit</div>
+      </div>
+    </div>
+
+    <p class="final-text">
+      Climate action is often framed as a cost.  
+      But quieter streets deliver economic value by making everyday life healthier,
+      calmer, and more liveable.
+    </p>
+  </div>
+</section>
+
+<script src="main.js"></script>
+</body>
+</html>
