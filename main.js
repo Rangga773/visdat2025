@@ -1,10 +1,13 @@
-const container = document.getElementById("map-container");
+const mapBackground = document.getElementById("map-background");
 const svg = d3.select("#map");
 const tooltip = d3.select("#tooltip");
 
+// Global state untuk track selected Local Authority
+let selectedLA = null;
+
 function size() {
-  const r = container.getBoundingClientRect();
-  return { width: r.width, height: r.height };
+  // Fixed size - tidak responsive
+  return { width: 1400, height: 900 };
 }
 
 function norm(s) {
@@ -22,22 +25,37 @@ Promise.all([
   d3.json("data/la_boundaries_simplified.geojson"),
   d3.csv("data/la_values_total.csv")
 ]).then(([geo, rows]) => {
-  // Remove extreme outlier geometries that break fitSize
-const overall = d3.geoBounds(geo);
-const overallW = Math.abs(overall[1][0] - overall[0][0]);
-const overallH = Math.abs(overall[1][1] - overall[0][1]);
-
-geo.features = geo.features.filter(f => {
-  const b = d3.geoBounds(f);
-  const w = Math.abs(b[1][0] - b[0][0]);
-  const h = Math.abs(b[1][1] - b[0][1]);
-
-  // If one feature spans most of the whole dataset bounds, it's suspicious
-  const tooWide = w > overallW * 0.8;
-  const tooHigh = h > overallH * 0.8;
-
-  return !(tooWide && tooHigh);
-});
+  // Smart filter: hapus hanya geometry yang benar-benar invalid atau extreme
+  const allBounds = [];
+  
+  // Collect all bounds untuk calculate median
+  for (const f of geo.features) {
+    try {
+      const b = d3.geoBounds(f);
+      if (b && b[0] && b[1]) {
+        const w = Math.abs(b[1][0] - b[0][0]);
+        const h = Math.abs(b[1][1] - b[0][1]);
+        if (w > 0 && h > 0) {
+          allBounds.push({ feature: f, width: w, height: h });
+        }
+      }
+    } catch (e) {
+      // Skip invalid geometry
+    }
+  }
+  
+  // Calculate median width/height sebagai baseline
+  const widths = allBounds.map(b => b.width).sort((a, b) => a - b);
+  const heights = allBounds.map(b => b.height).sort((a, b) => a - b);
+  const medianW = widths[Math.floor(widths.length / 2)];
+  const medianH = heights[Math.floor(heights.length / 2)];
+  
+  // Keep only features yang reasonably sized (tidak lebih dari 10x median)
+  geo.features = allBounds.filter(b => {
+    return b.width <= medianW * 10 && b.height <= medianH * 10;
+  }).map(b => b.feature);
+  
+  console.log("Kept", geo.features.length, "features after smart filter");
 
   const { width, height } = size();
   svg.attr("viewBox", [0, 0, width, height]);
@@ -65,6 +83,12 @@ geo.features = geo.features.filter(f => {
     propKeys.find(k => norm(k).includes("authority")) ||
     propKeys.find(k => norm(k).includes("lad") && norm(k).includes("name")) ||
     propKeys[0];
+
+  // Print semua feature names untuk debug
+  const geoFeatureNames = geo.features.map(f => String(f.properties[laProp] ?? "").trim());
+  console.log("GeoJSON features:", geoFeatureNames);
+  console.log("=== AVAILABLE REGIONS IN GEOJSON ===");
+  geoFeatureNames.forEach((name, idx) => console.log(`${idx + 1}. ${name}`));
 
   // Build value lookup
   const valueByLA = new Map();
@@ -124,6 +148,8 @@ geo.features = geo.features.filter(f => {
     })
     .attr("stroke", "rgba(0,0,0,0.35)")
     .attr("stroke-width", 0.6)
+    .attr("stroke-linecap", "round")
+    .attr("stroke-linejoin", "round")
     .on("mousemove", (event, d) => {
         // ambil data persis seperti kode kamu sebelumnya
         const name = String(d.properties[laProp] ?? "").trim();
@@ -143,7 +169,132 @@ geo.features = geo.features.filter(f => {
             .style("top", `${y - OFFSET_Y}px`)
             .html(`<strong>${name || "Unknown"}</strong><br/>Economic value: ${fmtMoney(v)}`);
         })
-        .on("mouseleave", () => tooltip.style("opacity", 0));
+        .on("mouseleave", () => tooltip.style("opacity", 0))
+        .on("click", (event, d) => {
+            const name = String(d.properties[laProp] ?? "").trim();
+            selectedLA = selectedLA === name ? null : name;
+            window.updateMapHighlight?.();
+            window.updateScene3Highlight?.();
+        });
+
+  // Function untuk update highlight di map
+  function updateMapHighlight() {
+    g.selectAll("path.area")
+      .attr("opacity", (d) => {
+        if (!selectedLA) return 1;
+        const name = String(d.properties[laProp] ?? "").trim();
+        return name === selectedLA ? 1 : 0.35;
+      })
+      .attr("stroke-width", (d) => {
+        if (!selectedLA) return 0.6;
+        const name = String(d.properties[laProp] ?? "").trim();
+        return name === selectedLA ? 0.2 : 0.6;
+      })
+      .attr("stroke", (d) => {
+        if (!selectedLA) return "rgba(0,0,0,0.35)";
+        const name = String(d.properties[laProp] ?? "").trim();
+        return name === selectedLA ? "#FFD700" : "rgba(0,0,0,0.35)";
+      })
+      .attr("filter", (d) => {
+        if (!selectedLA) return "none";
+        const name = String(d.properties[laProp] ?? "").trim();
+        return name === selectedLA ? "brightness(1.3)" : "none";
+      });
+
+    // Zoom ke area yang dipilih
+    if (selectedLA) {
+      zoomToLA(selectedLA);
+    } else {
+      // Reset zoom
+      svg.transition()
+        .duration(1200)
+        .ease(d3.easeCubicInOut)
+        .call(zoom.transform, d3.zoomIdentity.translate(0, 0).scale(1));
+    }
+  }
+
+  // Function untuk zoom ke LA tertentu
+  function zoomToLA(laName) {
+    // Fuzzy matching untuk handle perbedaan nama
+    let feature = geo.features.find(f => {
+      const name = String(f.properties[laProp] ?? "").trim();
+      return name === laName;
+    });
+
+    // Jika tidak ketemu, coba case-insensitive match
+    if (!feature) {
+      const laNameLower = laName.toLowerCase().replace(/\s+/g, " ");
+      feature = geo.features.find(f => {
+        const name = String(f.properties[laProp] ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+        return name === laNameLower;
+      });
+    }
+
+    // Jika masih tidak ketemu, coba partial match (contain)
+    if (!feature) {
+      const laNameLower = laName.toLowerCase();
+      feature = geo.features.find(f => {
+        const name = String(f.properties[laProp] ?? "").trim().toLowerCase();
+        return name.includes(laNameLower) || laNameLower.includes(name);
+      });
+    }
+
+    if (!feature) {
+      console.log("Feature not found:", laName);
+      console.log("Available features:", geo.features.map(f => String(f.properties[laProp] ?? "").trim()));
+      return;
+    }
+
+    const { width, height } = size();
+
+    // Create projection untuk feature
+    const projTemp = (maxAbs > 180)
+      ? d3.geoIdentity().reflectY(true).fitSize([width, height], geo)
+      : d3.geoMercator().fitSize([width, height], geo);
+
+    // Get path generator points untuk calculate zoom
+    const path = d3.geoPath(projTemp);
+
+    // Approximate zoom level dan pan
+    const bounds1 = path.bounds(feature);
+    
+    // Safety check untuk bounds yang invalid
+    if (!bounds1 || bounds1.length < 2 || !bounds1[0] || !bounds1[1]) {
+      console.log("Invalid bounds for feature:", laName, bounds1);
+      return;
+    }
+
+    const dx = bounds1[1][0] - bounds1[0][0];
+    const dy = bounds1[1][1] - bounds1[0][1];
+    
+    // Safety check untuk dx/dy yang terlalu kecil
+    if (dx < 5 || dy < 5) {
+      console.log("Feature too small, adjusting...", {dx, dy});
+    }
+
+    const x = (bounds1[0][0] + bounds1[1][0]) / 2;
+    const y = (bounds1[0][1] + bounds1[1][1]) / 2;
+
+    const scale = Math.max(1, Math.min(width / (dx || 1), height / (dy || 1)) * 0.5);
+    const translate = [width / 2 - scale * x, height / 2 - scale * y];
+
+    console.log("Zooming to", laName, "matched as", String(feature.properties[laProp] ?? "").trim(), { scale, translate, dx, dy });
+
+    svg.transition()
+      .duration(1200)
+      .ease(d3.easeCubicInOut)
+      .call(zoom.transform, d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale));
+  }
+
+  // Store reference untuk update dari scene 3
+  window.updateMapHighlight = updateMapHighlight;
+
+  // Function untuk update dari scene 3 - akan di-set nanti
+  window.updateScene3Highlight = function() {
+    if (window.updateScene3HighlightFn) {
+      window.updateScene3HighlightFn();
+    }
+  };
 
   // Optional: zoom + pan (biar enak explore)
   const zoom = d3.zoom()
@@ -204,7 +355,11 @@ function renderScene2() {
     .style("border-radius", "6px")
     .style("font-size", "0.85rem")
     .style("line-height", "1.35")
+    .style("z-index", "9999")
     .style("opacity", 0);
+
+  // Declare variables in outer scope so animateScene2 can access them
+  let sourceNames, impactNames, links;
 
   d3.json("data/mechanism_national_coben_pathway.json").then(raw => {
     if (!Array.isArray(raw) || raw.length === 0) {
@@ -214,164 +369,234 @@ function renderScene2() {
 
     // Detect columns
     const cols = Object.keys(raw[0]);
-
     const cobCol =
       cols.find(c => norm(c).includes("co") && norm(c).includes("benefit")) ||
       cols.find(c => norm(c).includes("benefit")) ||
       cols[0];
-
     const pathCol =
       cols.find(c => norm(c).includes("pathway")) ||
       cols.find(c => norm(c).includes("mechanism")) ||
       cols[1];
-
     const valCol =
       cols.find(c => norm(c).includes("value") && norm(c).includes("mgbp")) ||
       cols.find(c => norm(c).includes("value")) ||
       cols[2];
 
-    // Clean rows and aggregate to pathway total
     const cleaned = raw.map(d => ({
-      pathway: String(d[pathCol] ?? "").trim(),
-      cobenefit: String(d[cobCol] ?? "").trim(),
-      value: Number(String(d[valCol] ?? "").replaceAll(",", ""))
-    })).filter(d => d.pathway && Number.isFinite(d.value));
+      cobenefit: String(d["co-benefit_type"] ?? d[cobCol] ?? "").trim(),
+      pathway: String(d["damage_pathway"] ?? d[pathCol] ?? "").trim(),
+      value: Number(String(d["value_mGBP"] ?? d[valCol] ?? "").replaceAll(",", ""))
+    })).filter(d => d.cobenefit && d.pathway && Number.isFinite(d.value));
 
-    const byPath = d3.rollups(
-      cleaned,
-      v => d3.sum(v, d => d.value),
-      d => d.pathway
-    ).map(([pathway, value]) => ({ pathway, value }))
-     .sort((a, b) => b.value - a.value);
+    // Define source mapping - map from co-benefit TYPE to source (left side)
+    const sourceMap = {
+      "Calmer & Safer Streets": { pattern: ["noise"] },
+      "Cleaner Environments": { pattern: ["air_quality", "air", "pollution"] },
+      "Active Movement": { pattern: ["physical_activity", "activity", "physical", "travel", "walking", "diet"] }
+    };
 
-    const total = d3.sum(byPath, d => d.value);
+    // Define impact mapping - map from damage PATHWAY to impact (right side)
+    // Order matters for storytelling (left to right narrative flow)
+    const impactMap = {
+      "Health & Lives": { pattern: ["mortality", "qaly", "health"] },
+      "Wellbeing & Sleep": { pattern: ["sleep_disturbance", "sleep", "disturbance", "wellbeing"] },
+      "Time & Convenience": { pattern: ["time_saved", "time", "convenience", "amenity", "nhs", "cost", "saving", "society"] }
+    };
 
-    // Choose top N, but never exceed available categories
-    const requestedTopN = 10;
-    const top = byPath.slice(0, Math.min(requestedTopN, byPath.length));
+    function getSourceForCobenefit(cobenefit) {
+      const norm_cob = norm(cobenefit);
+      for (const [source, cfg] of Object.entries(sourceMap)) {
+        if (cfg.pattern.some(p => norm_cob.includes(p))) return source;
+      }
+      return "Active Movement"; // default
+    }
 
-    const shown = top.length;
-    const topTotal = d3.sum(top, d => d.value);
+    function getImpactForPathway(pathway, cobenefit) {
+      // Priority 1: Match cobenefit to specific impacts
+      const norm_cob = norm(cobenefit);
+      
+      // Air quality → Wellbeing & Sleep
+      if (norm_cob.includes("air")) {
+        return "Wellbeing & Sleep";
+      }
+      
+      // Priority 2: Match pathway to impacts
+      const norm_path = norm(pathway);
+      for (const [impact, cfg] of Object.entries(impactMap)) {
+        if (cfg.pattern.some(p => norm_path.includes(p))) return impact;
+      }
+      return "Time & Convenience"; // default (was Economic Savings)
+    }
 
-    // Count negatives in the shown set
-    const negCount = top.filter(d => d.value < 0).length;
+    // Build Sankey nodes and links - maintain explicit order
+    sourceNames = Object.keys(sourceMap); // Quieter Streets, Cleaner Air, Active Travel
+    impactNames = Object.keys(impactMap); // Health & Lives, Wellbeing & Sleep, Time & Convenience, Economic Savings
+    
+    // Aggregate by source->impact path
+    const linkMap = new Map();
+    for (const row of cleaned) {
+      const source = getSourceForCobenefit(row.cobenefit);
+      const impact = getImpactForPathway(row.pathway, row.cobenefit);
+      const key = `${source}|${impact}`;
+      linkMap.set(key, (linkMap.get(key) || 0) + row.value);
+    }
 
-    noteEl.textContent =
-      `Top ${shown} pathways shown. ` +
-      `Together: ${Math.round((topTotal / total) * 100)}% of national total. `;
+    links = Array.from(linkMap.entries()).map(([key, value]) => {
+      const [source, impact] = key.split("|");
+      return {
+        sourceIdx: sourceNames.indexOf(source),
+        targetIdx: impactNames.indexOf(impact),
+        value: Math.abs(value)
+      };
+    });
+
+    console.log("Sankey data:", { sourceNames, impactNames, linkCount: links.length, links: links.slice(0, 5) });
 
     function draw() {
       const { width, height } = s2Size();
       svg2.attr("viewBox", [0, 0, width, height]);
       svg2.selectAll("*").remove();
 
-      const margin = { top: 20, right: 30, bottom: 70, left: 260 };
-      const innerW = Math.max(10, width - margin.left - margin.right);
-      const innerH = Math.max(10, height - margin.top - margin.bottom);
+      const margin = { top: 40, right: 180, bottom: 40, left: 180 };
+      const innerW = Math.max(200, width - margin.left - margin.right);
+      const innerH = Math.max(200, height - margin.top - margin.bottom);
 
       const g = svg2.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
-      const y = d3.scaleBand()
-        .domain(top.map(d => d.pathway))
-        .range([0, innerH])
-        .padding(0.18);
+      // Build nodes for Sankey
+      const allNodes = [
+        ...sourceNames.map(s => ({ name: s, type: "source" })),
+        ...impactNames.map(i => ({ name: i, type: "impact" }))
+      ];
 
-      const minV = d3.min(top, d => d.value) ?? 0;
-      const maxV = d3.max(top, d => d.value) ?? 1;
+      const nodeIndexMap = new Map(allNodes.map((n, i) => [n.name, i]));
 
-      const x = d3.scaleLinear()
-        .domain([Math.min(0, minV), Math.max(0, maxV)])
-        .nice()
-        .range([0, innerW]);
+      // Convert links to use node indices
+      const linksWithIndices = links.map(l => {
+        const srcName = sourceNames[l.sourceIdx];
+        const impactName = impactNames[l.targetIdx];
+        return {
+          source: nodeIndexMap.get(srcName),
+          target: nodeIndexMap.get(impactName),
+          value: l.value
+        };
+      });
 
-      const x0 = x(0);
+      // D3 Sankey layout
+      const sankey = d3.sankey()
+        .nodeWidth(80)
+        .nodePadding(100)
+        .size([innerW, innerH]);
 
-      // background grid ticks
-      g.append("g")
-        .selectAll("line")
-        .data(x.ticks(5))
-        .join("line")
-        .attr("x1", d => x(d))
-        .attr("x2", d => x(d))
-        .attr("y1", 0)
-        .attr("y2", innerH)
-        .attr("stroke", "rgba(255,255,255,0.06)");
+      const { nodes: layoutNodes, links: layoutLinks } = sankey({
+        nodes: allNodes.map(d => ({ ...d })),
+        links: linksWithIndices.map(d => ({ ...d }))
+      });
 
-      // zero line
-      g.append("line")
-        .attr("x1", x0)
-        .attr("x2", x0)
-        .attr("y1", 0)
-        .attr("y2", innerH)
-        .attr("stroke", "rgba(255,255,255,0.18)");
+      // Colors
+      const sourceColors = {
+        "Calmer & Safer Streets": "#78B7C5",
+        "Cleaner Environments": "#7BC4A4",
+        "Active Movement": "#E3A45B"
+      };
 
-      // highlight largest (by absolute, to also catch large negative if any)
-      const maxAbs = d3.max(top, d => Math.abs(d.value)) ?? 0;
+      const impactColors = {
+        "Health & Lives": "#6C8FA3",
+        "Wellbeing & Sleep": "#6C8FA3",
+        "Time & Convenience": "#6C8FA3"
+      };
 
-      // bars
-      g.selectAll("rect")
-        .data(top)
-        .join("rect")
-        .attr("class", "comp-bar")
-        .attr("x", x0)
-        .attr("y", d => y(d.pathway))
-        .attr("width", 0) // Start from 0
-        .attr("height", y.bandwidth())
-        .attr("rx", 8)
-        .attr("ry", 8)
-        .attr("fill", d => {
-            const isHighlight = Math.abs(d.value) === maxAbs;
-            if (isHighlight) return "rgba(120, 210, 210, 0.65)";
-            return "rgba(120, 210, 210, 0.30)";
-        })
+      // Draw links with animation
+      g.selectAll(".sankey-link")
+        .data(layoutLinks)
+        .join("path")
+        .attr("class", "sankey-link")
+        .attr("d", d3.sankeyLinkHorizontal())
         .attr("stroke", d => {
-            const isHighlight = Math.abs(d.value) === maxAbs;
-            if (isHighlight) return "rgba(120, 210, 210, 0.55)";
-            return "rgba(120, 210, 210, 0.20)";
+          const srcNode = layoutNodes[d.source.index];
+          return srcNode.type === "source" ? sourceColors[srcNode.name] : "#999";
         })
-        .attr("stroke-width", 1)
-        .on("mousemove", (event, d) => {
-            tip
+        .attr("stroke-opacity", 0.6)
+        .attr("stroke-width", d => Math.max(1, d.width))
+        .attr("fill", "none")
+        // Setup for stroke animation
+        .attr("stroke-dasharray", function() { return this.getTotalLength(); })
+        .attr("stroke-dashoffset", function() { return this.getTotalLength(); })
+        // Animate stroke from right to left (reveal animation)
+        .transition()
+        .duration(1500)
+        .delay((d, i) => i * 50)
+        .attr("stroke-dashoffset", 0)
+        .on("end", function() {
+          d3.select(this).attr("stroke-dasharray", null).attr("stroke-dashoffset", null);
+        })
+        .selection()
+        .on("mousemove", function(event, d) {
+          d3.select(this).attr("stroke-opacity", 0.85);
+          const srcName = layoutNodes[d.source.index].name;
+          const targetName = layoutNodes[d.target.index].name;
+          tip
             .style("opacity", 1)
             .style("left", `${event.clientX + 12}px`)
             .style("top", `${event.clientY - 12}px`)
-            .html(
-                `<strong>${humanizeKey(d.pathway)}</strong><br/>` +
-                `National value: ${fmtMoney(d.value)}`
-            );
+            .html(`<strong>${srcName} → ${targetName}</strong><br/>Value: ${fmtMoney(d.value)}`);
+        })
+        .on("mouseleave", function() {
+          d3.select(this).attr("stroke-opacity", 0.6);
+          tip.style("opacity", 0);
+        })
+        .style("cursor", "pointer");
+
+      // Draw nodes
+      g.selectAll(".sankey-node")
+        .data(layoutNodes)
+        .join("rect")
+        .attr("class", "sankey-node")
+        .attr("x", d => d.x0)
+        .attr("y", d => d.y0)
+        .attr("width", d => d.x1 - d.x0)
+        .attr("height", d => d.y1 - d.y0)
+        .attr("fill", d => d.type === "source" ? sourceColors[d.name] : impactColors[d.name])
+        .attr("opacity", 0.85)
+        .attr("rx", 4)
+        .on("mousemove", (event, d) => {
+          // D3 Sankey calculates node.value automatically from links
+          const value = d.value || 0;
+          tip
+            .style("opacity", 1)
+            .style("left", `${event.clientX + 12}px`)
+            .style("top", `${event.clientY - 12}px`)
+            .html(`<strong>${d.name}</strong><br/>Value: ${fmtMoney(value)}`);
         })
         .on("mouseleave", () => tip.style("opacity", 0))
-        .transition()
-        .duration(900)
-        .delay((d, i) => i * 60)
-        .attr("x", d => d.value < 0 ? x(d.value) : x0)
-        .attr("width", d => Math.abs(x(d.value) - x0));
+        .style("cursor", "pointer");
 
-      // pathway labels (left)
-      g.selectAll("text.comp-label")
-        .data(top)
+      // Node labels (names)
+      g.selectAll(".sankey-label")
+        .data(layoutNodes)
         .join("text")
-        .attr("class", "comp-label")
-        .attr("x", -12)
-        .attr("y", d => y(d.pathway) + y.bandwidth() / 2)
-        .attr("text-anchor", "end")
+        .attr("class", "sankey-label")
+        .attr("x", d => d.type === "source" ? d.x0 - 12 : d.x1 + 12)
+        .attr("y", d => (d.y0 + d.y1) / 2 - 10)
+        .attr("text-anchor", d => d.type === "source" ? "end" : "start")
         .attr("dominant-baseline", "middle")
-        .text(d => humanizeKey(d.pathway));
+        .attr("font-size", "12px")
+        .attr("font-weight", "bold")
+        .attr("fill", "#cfd3d8")
+        .text(d => d.name);
 
-      // values (near bar end, correct side for negative)
-      g.selectAll("text.comp-value")
-        .data(top)
+      // Node values (always visible)
+      g.selectAll(".sankey-value")
+        .data(layoutNodes)
         .join("text")
-        .attr("class", "comp-value")
-        .attr("y", d => y(d.pathway) + y.bandwidth() / 2)
-        .attr("x", d => {
-          const a = x(d.value);
-          const w = Math.abs(a - x0);
-          return d.value >= 0 ? (x0 + w - 10) : (x0 - w + 10);
-        })
-        .attr("text-anchor", d => (d.value >= 0 ? "end" : "start"))
+        .attr("class", "sankey-value")
+        .attr("x", d => d.type === "source" ? d.x0 - 12 : d.x1 + 12)
+        .attr("y", d => (d.y0 + d.y1) / 2 + 10)
+        .attr("text-anchor", d => d.type === "source" ? "end" : "start")
         .attr("dominant-baseline", "middle")
-        .text(d => fmtMoney(d.value));
+        .attr("font-size", "11px")
+        .attr("fill", "#a0a8af")
+        .text(d => fmtMoney(d.value || 0));
     }
 
     // Tambahkan flag agar tidak animasi dua kali
@@ -379,7 +604,9 @@ function renderScene2() {
 
     function animateScene2() {
       if (scene2Animated) return;
+      if (!sourceNames || !links) return; // wait for data to load
       scene2Animated = true;
+      console.log("Rendering Scene 2 Sankey with data:", { sourceCount: sourceNames.length, linkCount: links.length });
       draw();
     }
 
@@ -540,9 +767,15 @@ function renderScene3() {
         .attr("height", y.bandwidth())
         .attr("rx", 6)
         .attr("ry", 6)
+        .style("cursor", "pointer")
+        .on("click", (event, d) => {
+          selectedLA = selectedLA === d.name ? null : d.name;
+          window.updateMapHighlight?.();
+          window.updateScene3Highlight?.();
+        })
         .transition()
-        .duration(900)
-        .delay((d, i) => i * 60)
+        .duration(1500)
+        .delay((d, i) => i * 80)
         .attr("width", d => x(d.value));
 
       // Labels
@@ -561,10 +794,31 @@ function renderScene3() {
         .data(rows)
         .join("text")
         .attr("class", "rank-value")
-        .attr("x", d => x(d.value) + 8)
+        .attr("x", d => x(0) + 8)
         .attr("y", d => y(d.name) + y.bandwidth() / 2)
         .attr("dominant-baseline", "middle")
-        .text(d => fmtMoney(d.value));
+        .text(d => fmtMoney(0))
+        .transition()
+        .duration(1500)
+        .delay((d, i) => i * 80)
+        .attr("x", d => x(d.value) + 8)
+        .textTween(function(d) {
+          const interpolate = d3.interpolate(0, d.value);
+          return function(t) {
+            return fmtMoney(interpolate(t));
+          };
+        });
+
+      // Function untuk update highlight di scene 3
+      function updateScene3Bars() {
+        g.selectAll("rect").attr("opacity", (d) => {
+          if (!selectedLA) return 1;
+          return d.name === selectedLA ? 1 : 0.3;
+        });
+      }
+
+      // Store reference untuk update dari map
+      window.updateScene3HighlightFn = updateScene3Bars;
     }
   });
 }
@@ -592,6 +846,9 @@ function renderScene4() {
   function humanize(s) {
     return String(s ?? "").replaceAll("_", " ");
   }
+
+  // Store card values for animation
+  const cardValues = {};
 
   d3.json("data/mechanism_national_coben_pathway.json").then(raw => {
     if (!Array.isArray(raw) || raw.length === 0) return;
@@ -655,7 +912,11 @@ function renderScene4() {
       const sEl = document.getElementById(`kpi-${prefix}-sub`);
       if (!vEl || !sEl) return;
 
-      vEl.textContent = fmtSignedMoney(obj.value);
+      const finalValue = Math.abs(obj.value);
+      cardValues[prefix] = finalValue;
+
+      // Display absolute value (time_saved is negative in data but positive in meaning)
+      vEl.textContent = fmtMoney(finalValue);
 
       const share = Math.round((Math.abs(obj.value) / totalAbs) * 100);
       const label = obj.fallback
@@ -670,6 +931,35 @@ function renderScene4() {
     if (byPrefix.get("sleep")) setCard("sleep", byPrefix.get("sleep"));
     if (byPrefix.get("amenity")) setCard("amenity", byPrefix.get("amenity"));
     if (byPrefix.get("time")) setCard("time", byPrefix.get("time"));
+
+    // Trigger animation on scene 4 visibility
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting && entry.target.id === "scene-4") {
+          animateScene4Cards();
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.3 });
+
+    const scene4 = document.getElementById("scene-4");
+    if (scene4) observer.observe(scene4);
+
+    function animateScene4Cards() {
+      for (const [prefix, finalValue] of Object.entries(cardValues)) {
+        const el = document.getElementById(`kpi-${prefix}`);
+        if (!el) continue;
+
+        d3.select(el)
+          .transition()
+          .duration(1500)
+          .delay((prefix === "sleep" ? 0 : prefix === "amenity" ? 200 : 400))
+          .textTween(function() {
+            const i = d3.interpolate(0, finalValue);
+            return t => fmtMoney(i(t));
+          });
+      }
+    }
   });
 }
 
@@ -687,6 +977,62 @@ function renderScene5() {
     return `£${mGBP.toFixed(1)}m`;
   }
 
+  const finalValues = {};
+  let scene5Animated = false;
+
+  function animateScene5() {
+    if (scene5Animated) return;
+    scene5Animated = true;
+
+    // Animate total
+    if (finalValues.total !== undefined) {
+      d3.select("#final-total")
+        .transition()
+        .duration(1500)
+        .textTween(function() {
+          const i = d3.interpolate(0, finalValues.total);
+          return t => fmtMoney(i(t));
+        });
+    }
+
+    // Animate health share
+    if (finalValues.health !== undefined) {
+      d3.select("#final-health")
+        .transition()
+        .duration(1500)
+        .delay(200)
+        .textTween(function() {
+          const i = d3.interpolate(0, finalValues.health);
+          return t => `${Math.round(i(t))}%`;
+        });
+    }
+
+    // Animate places share
+    if (finalValues.places !== undefined) {
+      d3.select("#final-places")
+        .transition()
+        .duration(1500)
+        .delay(400)
+        .textTween(function() {
+          const i = d3.interpolate(0, finalValues.places);
+          return t => `${Math.round(i(t))}%`;
+        });
+    }
+  }
+
+  // Setup intersection observer for scene 5
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting && entry.target.id === "scene-5") {
+        animateScene5();
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.3 });
+
+  const scene5 = document.getElementById("scene-5");
+  if (scene5) observer.observe(scene5);
+
   // 1) Total national value from pathways
   d3.json("data/mechanism_national_coben_pathway.json").then(raw => {
     if (!Array.isArray(raw) || !raw.length) return;
@@ -698,7 +1044,7 @@ function renderScene5() {
       cols[cols.length - 1];
 
     const total = d3.sum(raw, d => Number(String(d[valCol] ?? "").replaceAll(",", "")));
-    document.getElementById("final-total").textContent = fmtMoney(total);
+    finalValues.total = total;
 
     // Share related to health & wellbeing
     const healthKeys = ["mortality", "health", "sleep"];
@@ -710,7 +1056,7 @@ function renderScene5() {
     );
 
     const healthShare = total ? Math.round((healthValue / total) * 100) : 0;
-    document.getElementById("final-health").textContent = `${healthShare}%`;
+    finalValues.health = healthShare;
   });
 
   // 2) How many Local Authorities benefit
@@ -726,7 +1072,7 @@ function renderScene5() {
     const positive = rows.filter(r => Number(String(r[valCol] ?? "").replaceAll(",", "")) > 0);
     const share = Math.round((positive.length / rows.length) * 100);
 
-    document.getElementById("final-places").textContent = `${share}%`;
+    finalValues.places = share;
   });
 }
 
@@ -748,4 +1094,15 @@ function setupScrollReveal() {
   });
 
   targets.forEach(el => obs.observe(el));
+}
+
+// Scroll arrow button
+const scrollArrow = document.querySelector('.scroll-arrow');
+if (scrollArrow) {
+  scrollArrow.addEventListener('click', () => {
+    const nextSection = document.getElementById('scene-2');
+    if (nextSection) {
+      nextSection.scrollIntoView({ behavior: 'smooth' });
+    }
+  });
 }

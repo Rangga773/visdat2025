@@ -5,29 +5,34 @@
   <title>Quiet Streets, Better Lives</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0"></script>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-<section id="scene-map" class="reveal">
-  <div class="text stagger">
-    <h1>Quiet Streets, Better Lives</h1>
-    <p>
-      Economic value from climate action can be local, measurable, and surprisingly large.
-      This view shows Local Authorities as tiles, not a literal map.
-    </p>
-  </div>
+<!-- Fixed map background -->
+<div id="map-background">
+  <svg id="map"></svg>
+  <div id="tooltip"></div>
+</div>
 
-  <div id="map-container" class="reveal">
-    <svg id="map"></svg>
-    <div id="tooltip"></div>
+<section id="hero" class="reveal">
+  <div class="hero-content">
+    <h1>Quiet Streets, Better Lives</h1>
+    <p class="hero-subtitle">How everyday street changes quietly create real economic value.</p>
+    <p class="hero-cta">Scroll to explore how these benefits appear across the UK.</p>
+    <button class="scroll-arrow" aria-label="Scroll to next section">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M16 26L6 16M16 26L26 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
   </div>
 </section>
+
 <section id="scene-2" class="reveal">
   <div class="text">
     <h2>What drives the economic value</h2>
     <p>
-      The gains are not abstract. They come from concrete pathways,
-      like reduced damage, fewer incidents, and healthier environments.
+      Economic value flows from everyday changes in how streets feel, function, and support better lives.
     </p>
   </div>
 
@@ -87,17 +92,17 @@
 
     <div class="final-kpis stagger">
       <div class="final-kpi">
-        <div class="final-value" id="final-total">—</div>
+        <div class="final-value" id="final-total">£0m</div>
         <div class="final-label">Total national economic value</div>
       </div>
 
       <div class="final-kpi">
-        <div class="final-value" id="final-health">—</div>
+        <div class="final-value" id="final-health">0%</div>
         <div class="final-label">Driven by health & wellbeing</div>
       </div>
 
       <div class="final-kpi">
-        <div class="final-value" id="final-places">—</div>
+        <div class="final-value" id="final-places">0%</div>
         <div class="final-label">Local Authorities benefit</div>
       </div>
     </div>
