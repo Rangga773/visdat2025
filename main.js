@@ -519,6 +519,8 @@ function renderScene2() {
       };
 
       // Draw links with animation
+      let selectedLink = null;
+      
       g.selectAll(".sankey-link")
         .data(layoutLinks)
         .join("path")
@@ -554,8 +556,33 @@ function renderScene2() {
             .html(`<strong>${srcName} → ${targetName}</strong><br/>Value: ${fmtMoney(d.value)}`);
         })
         .on("mouseleave", function() {
-          d3.select(this).attr("stroke-opacity", 0.6);
+          if (selectedLink !== this) {
+            d3.select(this).attr("stroke-opacity", 0.6);
+          }
           tip.style("opacity", 0);
+        })
+        .on("click", function(event, d) {
+          // Toggle selection
+          if (selectedLink === this) {
+            // Deselect
+            d3.selectAll(".sankey-link").attr("stroke-opacity", 0.6);
+            selectedLink = null;
+            tip.style("opacity", 0);
+          } else {
+            // Select this link and fade others
+            d3.selectAll(".sankey-link")
+              .attr("stroke-opacity", link => (link === d ? 1 : 0.15));
+            selectedLink = this;
+            // Show tooltip with value
+            const srcName = layoutNodes[d.source.index].name;
+            const targetName = layoutNodes[d.target.index].name;
+            tip
+              .style("opacity", 1)
+              .style("left", `${event.clientX + 12}px`)
+              .style("top", `${event.clientY - 12}px`)
+              .html(`<strong>${srcName} → ${targetName}</strong><br/>Value: ${fmtMoney(d.value)}`);
+          }
+          event.stopPropagation();
         })
         .style("cursor", "pointer");
 
