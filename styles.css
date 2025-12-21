@@ -3,7 +3,7 @@
 }
 
 html {
-  scroll-snap-type: none;
+  scroll-behavior: smooth;
 }
 
 html, body {
@@ -40,6 +40,7 @@ html, body {
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: -0.5px;
+  animation: fade-slide-up 0.8s ease-out 0.2s both;
 }
 
 .hero-subtitle {
@@ -48,6 +49,7 @@ html, body {
   color: #cfd3d8;
   margin: 0 0 2.5rem 0;
   font-weight: 400;
+  animation: fade-slide-up 0.8s ease-out 0.4s both;
 }
 
 .hero-cta {
@@ -56,6 +58,7 @@ html, body {
   margin: 0 0 3rem 0;
   font-style: italic;
   opacity: 0.8;
+  animation: fade-slide-up 0.8s ease-out 0.6s both;
 }
 
 .scroll-arrow {
@@ -68,7 +71,7 @@ html, body {
   align-items: center;
   justify-content: center;
   transition: all 0.3s ease;
-  animation: subtle-bounce 3s infinite;
+  animation: subtle-bounce 3s infinite 0.8s, fade-slide-up 0.8s ease-out 0.8s both;
   opacity: 0.6;
 }
 
@@ -91,15 +94,40 @@ html, body {
   }
 }
 
-/* Fixed map background */
+@keyframes map-appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Full-height scrollable map background */
 #map-background {
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
   width: 100%;
-  height: 100%;
+  height: 500vh;
   z-index: 0;
   overflow: hidden;
+  animation: map-appear 1.5s ease-out forwards;
+}
+
+body {
+  position: relative;
 }
 
 #map {
@@ -465,3 +493,4 @@ section.reveal {
 .stagger.in-view > *:nth-child(3) { transition-delay: 180ms; }
 .stagger.in-view > *:nth-child(4) { transition-delay: 270ms; }
 .stagger.in-view > *:nth-child(5) { transition-delay: 360ms; }
+

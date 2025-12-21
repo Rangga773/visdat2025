@@ -56,6 +56,7 @@ Promise.all([
   }).map(b => b.feature);
   
   console.log("Kept", geo.features.length, "features after smart filter");
+  console.log("Median width:", medianW, "Median height:", medianH);
 
   const { width, height } = size();
   svg.attr("viewBox", [0, 0, width, height]);
@@ -242,6 +243,12 @@ Promise.all([
     if (!feature) {
       console.log("Feature not found:", laName);
       console.log("Available features:", geo.features.map(f => String(f.properties[laProp] ?? "").trim()));
+      // FALLBACK: zoom ke semua geo jika daerah tidak ditemukan
+      console.log("Zooming to entire map instead");
+      svg.transition()
+        .duration(1200)
+        .ease(d3.easeCubicInOut)
+        .call(zoom.transform, d3.zoomIdentity.translate(0, 0).scale(1));
       return;
     }
 
@@ -261,6 +268,11 @@ Promise.all([
     // Safety check untuk bounds yang invalid
     if (!bounds1 || bounds1.length < 2 || !bounds1[0] || !bounds1[1]) {
       console.log("Invalid bounds for feature:", laName, bounds1);
+      // FALLBACK: reset zoom
+      svg.transition()
+        .duration(1200)
+        .ease(d3.easeCubicInOut)
+        .call(zoom.transform, d3.zoomIdentity.translate(0, 0).scale(1));
       return;
     }
 
