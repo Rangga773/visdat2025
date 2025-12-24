@@ -6,11 +6,12 @@ html {
   scroll-behavior: smooth;
 }
 
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
   background-color: #0e1116;
-  background-image: 
+  background-image:
     radial-gradient(circle at 20% 50%, rgba(120, 183, 197, 0.08) 0%, transparent 50%),
     radial-gradient(circle at 80% 80%, rgba(123, 196, 164, 0.08) 0%, transparent 50%),
     radial-gradient(circle at 40% 20%, rgba(227, 164, 91, 0.06) 0%, transparent 50%),
@@ -86,9 +87,12 @@ html, body {
 }
 
 @keyframes subtle-bounce {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translateY(0);
   }
+
   50% {
     transform: translateY(4px);
   }
@@ -98,6 +102,7 @@ html, body {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -108,22 +113,24 @@ html, body {
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
 
-/* Full-height scrollable map background */
-#map-background {
-  position: absolute;
-  top: 0;
-  left: 0;
+/* Map container specific sizing */
+#map-container-scene3 {
+  position: relative;
   width: 100%;
-  height: 500vh;
-  z-index: 0;
+  height: 100%;
+  /* Match rank container height (fill grid) */
+  min-height: 60vh;
+  border-radius: 12px;
   overflow: hidden;
-  animation: map-appear 1.5s ease-out forwards;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 body {
@@ -179,6 +186,20 @@ section.reveal {
   color: #cfd3d8;
 }
 
+#scene-3 .text {
+  max-width: 100%;
+  padding-bottom: 2rem;
+}
+
+#scene-3 .text h2 {
+  margin-bottom: 0.5rem;
+}
+
+#scene-3 .text p {
+  max-width: 800px;
+  /* Allow it to be wider */
+}
+
 #map-container {
   position: relative;
   width: 100%;
@@ -196,6 +217,7 @@ section.reveal {
   transition: fill 0.2s, opacity 0.2s, stroke 0.2s, stroke-width 0.2s, filter 0.2s;
   cursor: pointer;
 }
+
 .area:hover {
   opacity: 0.9;
   stroke: #fff;
@@ -213,8 +235,9 @@ section.reveal {
   font-size: 0.85rem;
   line-height: 1.4;
   opacity: 0;
-  transform: translate(100%, 100%);
   white-space: nowrap;
+  z-index: 9999;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 #scene-2 {
@@ -261,23 +284,37 @@ section.reveal {
   fill: rgba(120, 210, 210, 0.55);
 }
 
-.comp-label { fill: #cfd3d8; font-size: 12px; }
-.comp-value { fill: #cfd3d8; font-size: 12px; }
+.comp-label {
+  fill: #cfd3d8;
+  font-size: 12px;
+}
+
+.comp-value {
+  fill: #cfd3d8;
+  font-size: 12px;
+}
 
 #scene-3 {
   min-height: 100vh;
   padding: 4rem;
   display: grid;
-  grid-template-columns: 1.1fr 1.9fr;
-  gap: 1.2rem;
-  align-items: start;
+  grid-template-columns: 1fr 1fr;
+  /* Equal width columns */
+  grid-template-rows: min-content 1fr;
+  /* Text takes minimal space, content fills spread */
+  gap: 2rem;
   background-color: rgba(14, 17, 22, 0.88) !important;
 }
 
+/* Make Chart and Map fill the remaining height */
 #rank-container {
-  position: relative;
   width: 100%;
-  height: 80vh;
+  height: 100%;
+  /* Fill the grid cell exactly */
+  min-height: 60vh;
+  position: relative;
+  padding: 1.5rem;
+  /* Symmetrical padding all around */
 }
 
 #rank {
@@ -287,13 +324,13 @@ section.reveal {
 }
 
 #rank-note {
-  position: absolute;
-  left: 0;
-  bottom: 0;
+  position: relative;
   color: #cfd3d8;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   opacity: 0.9;
-  padding-bottom: 0.5rem;
+  margin-bottom: 0.3rem;
+  text-align: center;
+  padding: 0 1rem;
 }
 
 .rank-bar {
@@ -367,9 +404,9 @@ section.reveal {
 .card {
   border-radius: 18px;
   padding: 1.4rem 1.6rem;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.10);
-  box-shadow: 0 18px 50px rgba(0,0,0,0.22);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22);
 }
 
 .kpi-title {
@@ -388,13 +425,21 @@ section.reveal {
 .kpi-sub {
   margin-top: 0.5rem;
   font-size: 0.95rem;
-  color: rgba(207,211,216,0.92);
+  color: rgba(207, 211, 216, 0.92);
   line-height: 1.4;
 }
 
-#card-sleep .kpi-value { color: rgba(120, 210, 210, 0.95); }
-#card-amenity .kpi-value { color: rgba(160, 200, 255, 0.95); }
-#card-time .kpi-value { color: rgba(255, 210, 140, 0.95); }
+#card-sleep .kpi-value {
+  color: rgba(120, 210, 210, 0.95);
+}
+
+#card-amenity .kpi-value {
+  color: rgba(160, 200, 255, 0.95);
+}
+
+#card-time .kpi-value {
+  color: rgba(255, 210, 140, 0.95);
+}
 
 #scene-5 {
   min-height: 100vh;
@@ -477,20 +522,121 @@ section.reveal {
 }
 
 /* Stagger ringan untuk elemen dalam scene */
-.stagger > * {
+.stagger>* {
   opacity: 0;
   transform: translateY(14px);
   transition: opacity 650ms ease, transform 650ms ease;
 }
 
-.stagger.in-view > * {
+.stagger.in-view>* {
   opacity: 1;
   transform: translateY(0);
 }
 
-.stagger.in-view > *:nth-child(1) { transition-delay: 0ms; }
-.stagger.in-view > *:nth-child(2) { transition-delay: 90ms; }
-.stagger.in-view > *:nth-child(3) { transition-delay: 180ms; }
-.stagger.in-view > *:nth-child(4) { transition-delay: 270ms; }
-.stagger.in-view > *:nth-child(5) { transition-delay: 360ms; }
+.stagger.in-view>*:nth-child(1) {
+  transition-delay: 0ms;
+}
 
+.stagger.in-view>*:nth-child(2) {
+  transition-delay: 90ms;
+}
+
+.stagger.in-view>*:nth-child(3) {
+  transition-delay: 180ms;
+}
+
+.stagger.in-view>*:nth-child(4) {
+  transition-delay: 270ms;
+}
+
+.stagger.in-view>*:nth-child(5) {
+  transition-delay: 360ms;
+}
+
+/* Footer Styles */
+#footer {
+  background-color: rgba(14, 17, 22, 0.96);
+  padding: 4rem 2rem;
+  text-align: center;
+  position: relative;
+  z-index: 1;
+}
+
+.footer-content {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.footer-credits {
+  margin-bottom: 2.5rem;
+}
+
+.footer-title {
+  font-size: 1.2rem;
+  color: #f5f5f5;
+  margin: 0 0 0.5rem 0;
+}
+
+.footer-title .highlight {
+  color: #78d2d2;
+  font-weight: 600;
+}
+
+.footer-members {
+  font-size: 0.95rem;
+  color: #a0a8af;
+  margin: 0;
+}
+
+.footer-sources {
+  margin-bottom: 2rem;
+}
+
+.footer-sources h3,
+.footer-methodology h3 {
+  font-size: 1rem;
+  color: #78d2d2;
+  margin: 0 0 0.6rem 0;
+  font-weight: 500;
+}
+
+.footer-sources p {
+  color: #cfd3d8;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.footer-sources a {
+  color: #a0c8ff;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.footer-sources a:hover {
+  color: #78d2d2;
+  text-decoration: underline;
+}
+
+.footer-methodology {
+  margin-bottom: 2.5rem;
+}
+
+.footer-methodology p {
+  font-size: 0.85rem;
+  color: #cfd3d8;
+  line-height: 1.6;
+  margin: 0;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.footer-copyright {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 1.5rem;
+}
+
+.footer-copyright p {
+  font-size: 0.8rem;
+  color: #a0a8af;
+  margin: 0;
+}

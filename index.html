@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8" />
   <title>Quiet Streets, Better Lives</title>
@@ -8,113 +9,150 @@
   <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0"></script>
   <link rel="stylesheet" href="styles.css" />
 </head>
+
 <body>
-<!-- Fixed map background -->
-<div id="map-background">
-  <svg id="map"></svg>
-  <div id="tooltip"></div>
-</div>
 
-<section id="hero" class="reveal">
-  <div class="hero-content">
-    <h1>Quiet Streets, Better Lives</h1>
-    <p class="hero-subtitle">How everyday street changes quietly create real economic value.</p>
-    <p class="hero-cta">Scroll to explore how these benefits appear across the UK.</p>
-    <button class="scroll-arrow" aria-label="Scroll to next section">
-      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M16 26L6 16M16 26L26 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </button>
-  </div>
-</section>
 
-<section id="scene-2" class="reveal">
-  <div class="text">
-    <h2>What drives the economic value</h2>
-    <p>
-      Economic value flows from everyday changes in how streets feel, function, and support better lives.
-    </p>
-  </div>
+  <section id="hero" class="reveal">
+    <div class="hero-content">
+      <h1>Quiet Streets, Better Lives</h1>
+      <p class="hero-subtitle">How everyday street changes quietly create real economic value.</p>
+      <p class="hero-cta">Scroll to explore how these benefits appear across the UK.</p>
+      <button class="scroll-arrow" aria-label="Scroll to next section">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M16 26L6 16M16 26L26 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round" />
+        </svg>
+      </button>
+    </div>
+  </section>
 
-  <div id="comp-container">
-    <svg id="comp"></svg>
-    <div id="comp-note"></div>
-  </div>
-</section>
-<section id="scene-3" class="reveal">
-  <div class="text">
-    <h2>Who benefits the most</h2>
-    <p>
-      Quiet streets do not benefit everyone equally.
-      Some places gain far more than others.
-    </p>
-  </div>
-
-  <div id="rank-container">
-    <svg id="rank"></svg>
-    <div id="rank-note"></div>
-  </div>
-</section>
-
-<section id="scene-4" class="reveal">
-  <div class="text">
-    <h2>Better lives, every day</h2>
-    <p>
-      Quiet streets are not just a climate story.
-      They show up in daily life: sleep, comfort, and time.
-    </p>
-  </div>
-
-  <div id="cards" class="stagger">
-    <div class="card" id="card-sleep">
-      <div class="kpi-title">Better sleep</div>
-      <div class="kpi-value" id="kpi-sleep">—</div>
-      <div class="kpi-sub" id="kpi-sleep-sub">—</div>
+  <section id="scene-2" class="reveal">
+    <div class="text">
+      <h2>What drives the economic value</h2>
+      <p>
+        Economic value flows from everyday changes in how streets feel, function, and support better lives.
+      </p>
     </div>
 
-    <div class="card" id="card-amenity">
-      <div class="kpi-title">More liveable places</div>
-      <div class="kpi-value" id="kpi-amenity">—</div>
-      <div class="kpi-sub" id="kpi-amenity-sub">—</div>
+    <div id="comp-container">
+      <svg id="comp"></svg>
+      <div id="comp-note"></div>
+    </div>
+  </section>
+  <section id="scene-3" class="reveal">
+    <div class="text" style="grid-column: 1 / -1; margin-bottom: 0;">
+      <h2>Who benefits the most</h2>
+      <p>
+        Quiet streets do not benefit everyone equally.
+        Some places gain far more than others.
+      </p>
     </div>
 
-    <div class="card" id="card-time">
-      <div class="kpi-title">Time back</div>
-      <div class="kpi-value" id="kpi-time">—</div>
-      <div class="kpi-sub" id="kpi-time-sub">—</div>
+    <div id="rank-container" class="card">
+      <div id="rank-note"></div>
+      <svg id="rank"></svg>
     </div>
-  </div>
-</section>
 
-<section id="scene-5" class="reveal">
-  <div class="final-wrap">
-    <h2>Quiet streets are an investment in better lives</h2>
+    <!-- Map moved here for Side-by-Side layout -->
+    <div id="map-container-scene3" class="card">
+      <svg id="map"></svg>
+      <div id="tooltip"></div>
+    </div>
+  </section>
 
-    <div class="final-kpis stagger">
-      <div class="final-kpi">
-        <div class="final-value" id="final-total">£0m</div>
-        <div class="final-label">Total national economic value</div>
+  <section id="scene-4" class="reveal">
+    <div class="text">
+      <h2>Better lives, every day</h2>
+      <p>
+        Quiet streets are not just a climate story.
+        They show up in daily life: sleep, comfort, and time.
+      </p>
+    </div>
+
+    <div id="cards" class="stagger">
+      <div class="card" id="card-sleep">
+        <div class="kpi-title">Better sleep</div>
+        <div class="kpi-value" id="kpi-sleep">—</div>
+        <div class="kpi-sub" id="kpi-sleep-sub">—</div>
       </div>
 
-      <div class="final-kpi">
-        <div class="final-value" id="final-health">0%</div>
-        <div class="final-label">Driven by health & wellbeing</div>
+      <div class="card" id="card-amenity">
+        <div class="kpi-title">More liveable places</div>
+        <div class="kpi-value" id="kpi-amenity">—</div>
+        <div class="kpi-sub" id="kpi-amenity-sub">—</div>
       </div>
 
-      <div class="final-kpi">
-        <div class="final-value" id="final-places">0%</div>
-        <div class="final-label">Local Authorities benefit</div>
+      <div class="card" id="card-time">
+        <div class="kpi-title">Time back</div>
+        <div class="kpi-value" id="kpi-time">—</div>
+        <div class="kpi-sub" id="kpi-time-sub">—</div>
       </div>
     </div>
+  </section>
 
-    <p class="final-text">
-      Climate action is often framed as a cost.  
-      But quieter streets deliver economic value by making everyday life healthier,
-      calmer, and more liveable.
-    </p>
-  </div>
-</section>
+  <section id="scene-5" class="reveal">
+    <div class="final-wrap">
+      <h2>Quiet streets are an investment in better lives</h2>
 
-<script src="main.js"></script>
+      <div class="final-kpis stagger">
+        <div class="final-kpi">
+          <div class="final-value" id="final-total">£0m</div>
+          <div class="final-label">Total national economic value</div>
+        </div>
+
+        <div class="final-kpi">
+          <div class="final-value" id="final-health">0%</div>
+          <div class="final-label">Driven by health & wellbeing</div>
+        </div>
+
+        <div class="final-kpi">
+          <div class="final-value" id="final-places">0%</div>
+          <div class="final-label">Local Authorities benefit</div>
+        </div>
+      </div>
+
+      <p class="final-text">
+        Climate action is often framed as a cost.
+        But quieter streets deliver economic value by making everyday life healthier,
+        calmer, and more liveable.
+      </p>
+    </div>
+  </section>
+
+  <footer id="footer">
+    <div class="footer-content">
+      <div class="footer-credits">
+        <p class="footer-title">Created by <span class="highlight">"Visual Data"</span> Team</p>
+        <p class="footer-members">Rangga Athari Gunawan • Muhammad Yassir A.W • Muhammad Irsyad Triananda</p>
+      </div>
+
+      <div class="footer-sources">
+        <h3>Data Sources & References</h3>
+        <p>
+          UK Co-Benefits Atlas •
+          The Data Lab Competition 2025 •
+        </p>
+      </div>
+
+      <div class="footer-methodology">
+        <h3>Methodology</h3>
+        <p>
+          This visualization explores the economic value generated by quieter, calmer streets across UK Local
+          Authorities.
+          Values represent monetized benefits in £ millions, including improvements in health, sleep quality, amenity,
+          and time savings.
+          Data is aggregated by Local Authority and visualized through interactive maps and comparative charts.
+        </p>
+      </div>
+
+      <div class="footer-copyright">
+        <p>© 2025 • Quiet Streets, Better Lives - Economic Value Visualization</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
 </body>
+
 </html>

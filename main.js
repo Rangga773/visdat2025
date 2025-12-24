@@ -1,13 +1,19 @@
-const mapBackground = document.getElementById("map-background");
+// Map is now in scene 3
+// const mapBackground = document.getElementById("map-background"); // Removed
 const svg = d3.select("#map");
 const tooltip = d3.select("#tooltip");
 
 // Global state untuk track selected Local Authority
 let selectedLA = null;
 
+const container = document.getElementById("map-container-scene3") || document.getElementById("map-background");
+
 function size() {
-  // Fixed size - tidak responsive
-  return { width: 1400, height: 900 };
+  if (container) {
+    const r = container.getBoundingClientRect();
+    if (r.width && r.height) return { width: r.width, height: r.height };
+  }
+  return { width: 800, height: 600 };
 }
 
 function norm(s) {
@@ -27,7 +33,7 @@ Promise.all([
 ]).then(([geo, rows]) => {
   // Smart filter: hapus hanya geometry yang benar-benar invalid atau extreme
   const allBounds = [];
-  
+
   // Collect all bounds untuk calculate median
   for (const f of geo.features) {
     try {
@@ -43,18 +49,18 @@ Promise.all([
       // Skip invalid geometry
     }
   }
-  
+
   // Calculate median width/height sebagai baseline
   const widths = allBounds.map(b => b.width).sort((a, b) => a - b);
   const heights = allBounds.map(b => b.height).sort((a, b) => a - b);
   const medianW = widths[Math.floor(widths.length / 2)];
   const medianH = heights[Math.floor(heights.length / 2)];
-  
+
   // Keep only features yang reasonably sized (tidak lebih dari 10x median)
   geo.features = allBounds.filter(b => {
     return b.width <= medianW * 10 && b.height <= medianH * 10;
   }).map(b => b.feature);
-  
+
   console.log("Kept", geo.features.length, "features after smart filter");
   console.log("Median width:", medianW, "Median height:", medianH);
 
@@ -115,10 +121,11 @@ Promise.all([
   console.log("Detected geo LA prop:", laProp);
   console.log("Matched:", matched, "/", geo.features.length);
 
-  // Color: quantile for contrast
-  const color = d3.scaleQuantile()
-    .domain(vals)
-    .range(d3.schemeYlGnBu[9]);
+  // Color: sequential gradient from low (light) to high (darker but visible)
+  const colorDomain = d3.extent(vals);
+  const color = d3.scaleSequential()
+    .domain(colorDomain)
+    .interpolator(d3.interpolateYlGn); // Yellow to Green - visible on dark bg
 
   // AUTO DETECT COORD SYSTEM (EPSG:27700 vs lonlat)
   const b = d3.geoBounds(geo);
@@ -132,6 +139,73 @@ Promise.all([
     : d3.geoMercator().fitSize([width, height], geo);
 
   const path = d3.geoPath(projection);
+
+  // Create Vertical Legend
+  const legendWidth = 20;
+  const legendHeight = 150;
+  const legendContainer = d3.select("#map-container-scene3")
+    .append("div")
+    .attr("id", "map-legend")
+    .style("position", "absolute")
+    .style("top", "20px")
+    .style("right", "20px")
+    .style("background", "rgba(20, 24, 32, 0.85)")
+    .style("padding", "12px 15px")
+    .style("border-radius", "8px")
+    .style("color", "#fff")
+    .style("font-size", "0.75rem");
+
+  legendContainer.append("div")
+    .style("margin-bottom", "8px")
+    .style("font-weight", "500")
+    .style("text-align", "center")
+    .text("Economic Value");
+
+  const legendSvg = legendContainer.append("svg")
+    .attr("width", legendWidth + 50)
+    .attr("height", legendHeight);
+
+  // Create vertical gradient
+  const defs = legendSvg.append("defs");
+  const gradient = defs.append("linearGradient")
+    .attr("id", "legend-gradient")
+    .attr("x1", "0%").attr("x2", "0%")
+    .attr("y1", "100%").attr("y2", "0%"); // Bottom to top
+
+  // Add gradient stops
+  const numStops = 10;
+  for (let i = 0; i <= numStops; i++) {
+    const t = i / numStops;
+    const val = colorDomain[0] + t * (colorDomain[1] - colorDomain[0]);
+    gradient.append("stop")
+      .attr("offset", `${t * 100}%`)
+      .attr("stop-color", color(val));
+  }
+
+  // Draw vertical gradient bar
+  legendSvg.append("rect")
+    .attr("x", 0)
+    .attr("y", 0)
+    .attr("width", legendWidth)
+    .attr("height", legendHeight)
+    .style("fill", "url(#legend-gradient)")
+    .attr("rx", 3);
+
+  // Add max label (top)
+  legendSvg.append("text")
+    .attr("x", legendWidth + 8)
+    .attr("y", 10)
+    .style("fill", "#cfd3d8")
+    .style("font-size", "0.7rem")
+    .text(fmtMoney(colorDomain[1]));
+
+  // Add min label (bottom)
+  legendSvg.append("text")
+    .attr("x", legendWidth + 8)
+    .attr("y", legendHeight - 2)
+    .style("fill", "#cfd3d8")
+    .style("font-size", "0.7rem")
+    .text(fmtMoney(colorDomain[0]));
 
   svg.selectAll("*").remove();
   const g = svg.append("g");
@@ -152,31 +226,29 @@ Promise.all([
     .attr("stroke-linecap", "round")
     .attr("stroke-linejoin", "round")
     .on("mousemove", (event, d) => {
-        // ambil data persis seperti kode kamu sebelumnya
-        const name = String(d.properties[laProp] ?? "").trim();
-        const v = valueByLA.get(name);
+      const name = String(d.properties[laProp] ?? "").trim();
+      const v = valueByLA.get(name);
 
-        // posisi tooltip relative ke map-container (biar tidak geser ke kanan)
-        const rect = container.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const y = event.clientY - rect.top;
+      // Get mouse position relative to container
+      const [mx, my] = d3.pointer(event, svg.node());
 
-        const OFFSET_X = 12;
-        const OFFSET_Y = 16;
+      const OFFSET_X = 15;
+      const OFFSET_Y = 15;
 
-        tooltip
-            .style("opacity", 1)
-            .style("left", `${x + OFFSET_X}px`)
-            .style("top", `${y - OFFSET_Y}px`)
-            .html(`<strong>${name || "Unknown"}</strong><br/>Economic value: ${fmtMoney(v)}`);
-        })
-        .on("mouseleave", () => tooltip.style("opacity", 0))
-        .on("click", (event, d) => {
-            const name = String(d.properties[laProp] ?? "").trim();
-            selectedLA = selectedLA === name ? null : name;
-            window.updateMapHighlight?.();
-            window.updateScene3Highlight?.();
-        });
+      tooltip
+        .style("opacity", 1)
+        .style("left", `${mx + OFFSET_X}px`)
+        .style("top", `${my + OFFSET_Y}px`)
+        .style("pointer-events", "none") // Prevent tooltip from blocking mouse events
+        .html(`<strong>${name || "Unknown"}</strong><br/>Economic value: ${fmtMoney(v)}`);
+    })
+    .on("mouseout", () => tooltip.style("opacity", 0)) // Changed from mouseleave to mouseout for better d3 handling
+    .on("click", (event, d) => {
+      const name = String(d.properties[laProp] ?? "").trim();
+      selectedLA = selectedLA === name ? null : name;
+      window.updateMapHighlight?.();
+      window.updateScene3Highlight?.();
+    });
 
   // Function untuk update highlight di map
   function updateMapHighlight() {
@@ -264,7 +336,7 @@ Promise.all([
 
     // Approximate zoom level dan pan
     const bounds1 = path.bounds(feature);
-    
+
     // Safety check untuk bounds yang invalid
     if (!bounds1 || bounds1.length < 2 || !bounds1[0] || !bounds1[1]) {
       console.log("Invalid bounds for feature:", laName, bounds1);
@@ -278,19 +350,25 @@ Promise.all([
 
     const dx = bounds1[1][0] - bounds1[0][0];
     const dy = bounds1[1][1] - bounds1[0][1];
-    
+
     // Safety check untuk dx/dy yang terlalu kecil
     if (dx < 5 || dy < 5) {
-      console.log("Feature too small, adjusting...", {dx, dy});
+      console.log("Feature too small, adjusting...", { dx, dy });
     }
 
     const x = (bounds1[0][0] + bounds1[1][0]) / 2;
     const y = (bounds1[0][1] + bounds1[1][1]) / 2;
 
-    const scale = Math.max(1, Math.min(width / (dx || 1), height / (dy || 1)) * 0.5);
-    const translate = [width / 2 - scale * x, height / 2 - scale * y];
+    // Use centroid for more accurate centering, especially for small/irregular shapes
+    const centroid = path.centroid(feature);
+    const cx = centroid[0];
+    const cy = centroid[1];
 
-    console.log("Zooming to", laName, "matched as", String(feature.properties[laProp] ?? "").trim(), { scale, translate, dx, dy });
+    // Limit max zoom for small areas to prevent over-zooming
+    const scale = Math.max(1, Math.min(6, Math.min(width / (dx || 50), height / (dy || 50)) * 0.6));
+    const translate = [width / 2 - scale * cx, height / 2 - scale * cy];
+
+    console.log("Zooming to", laName, "matched as", String(feature.properties[laProp] ?? "").trim(), { scale, translate, centroid, dx, dy });
 
     svg.transition()
       .duration(1200)
@@ -302,13 +380,13 @@ Promise.all([
   window.updateMapHighlight = updateMapHighlight;
 
   // Function untuk update dari scene 3 - akan di-set nanti
-  window.updateScene3Highlight = function() {
+  window.updateScene3Highlight = function () {
     if (window.updateScene3HighlightFn) {
       window.updateScene3HighlightFn();
     }
   };
 
-  // Optional: zoom + pan (biar enak explore)
+  // Optional: zoom + pan (drag to pan, scroll to zoom, double-click to zoom)
   const zoom = d3.zoom()
     .scaleExtent([1, 8])
     .on("zoom", (event) => g.attr("transform", event.transform));
@@ -426,12 +504,12 @@ function renderScene2() {
     function getImpactForPathway(pathway, cobenefit) {
       // Priority 1: Match cobenefit to specific impacts
       const norm_cob = norm(cobenefit);
-      
+
       // Air quality → Wellbeing & Sleep
       if (norm_cob.includes("air")) {
         return "Wellbeing & Sleep";
       }
-      
+
       // Priority 2: Match pathway to impacts
       const norm_path = norm(pathway);
       for (const [impact, cfg] of Object.entries(impactMap)) {
@@ -443,7 +521,7 @@ function renderScene2() {
     // Build Sankey nodes and links - maintain explicit order
     sourceNames = Object.keys(sourceMap); // Quieter Streets, Cleaner Air, Active Travel
     impactNames = Object.keys(impactMap); // Health & Lives, Wellbeing & Sleep, Time & Convenience, Economic Savings
-    
+
     // Aggregate by source->impact path
     const linkMap = new Map();
     for (const row of cleaned) {
@@ -520,7 +598,7 @@ function renderScene2() {
 
       // Draw links with animation
       let selectedLink = null;
-      
+
       g.selectAll(".sankey-link")
         .data(layoutLinks)
         .join("path")
@@ -534,18 +612,18 @@ function renderScene2() {
         .attr("stroke-width", d => Math.max(1, d.width))
         .attr("fill", "none")
         // Setup for stroke animation
-        .attr("stroke-dasharray", function() { return this.getTotalLength(); })
-        .attr("stroke-dashoffset", function() { return this.getTotalLength(); })
+        .attr("stroke-dasharray", function () { return this.getTotalLength(); })
+        .attr("stroke-dashoffset", function () { return this.getTotalLength(); })
         // Animate stroke from right to left (reveal animation)
         .transition()
         .duration(1500)
         .delay((d, i) => i * 50)
         .attr("stroke-dashoffset", 0)
-        .on("end", function() {
+        .on("end", function () {
           d3.select(this).attr("stroke-dasharray", null).attr("stroke-dashoffset", null);
         })
         .selection()
-        .on("mousemove", function(event, d) {
+        .on("mousemove", function (event, d) {
           d3.select(this).attr("stroke-opacity", 0.85);
           const srcName = layoutNodes[d.source.index].name;
           const targetName = layoutNodes[d.target.index].name;
@@ -555,13 +633,13 @@ function renderScene2() {
             .style("top", `${event.clientY - 12}px`)
             .html(`<strong>${srcName} → ${targetName}</strong><br/>Value: ${fmtMoney(d.value)}`);
         })
-        .on("mouseleave", function() {
+        .on("mouseleave", function () {
           if (selectedLink !== this) {
             d3.select(this).attr("stroke-opacity", 0.6);
           }
           tip.style("opacity", 0);
         })
-        .on("click", function(event, d) {
+        .on("click", function (event, d) {
           // Toggle selection
           if (selectedLink === this) {
             // Deselect
@@ -724,7 +802,7 @@ function renderScene3() {
       name: String(d[laCol] ?? "").trim(),
       value: Number(String(d[valCol] ?? "").replaceAll(",", ""))
     }))
-    .filter(d => d.name && Number.isFinite(d.value));
+      .filter(d => d.name && Number.isFinite(d.value));
 
     // Sort descending
     data.sort((a, b) => b.value - a.value);
@@ -747,15 +825,15 @@ function renderScene3() {
     let scene3Animated = false;
 
     function animateScene3() {
-    if (scene3Animated) return;
-    scene3Animated = true;
-    draw(combined);
+      if (scene3Animated) return;
+      scene3Animated = true;
+      draw(combined);
     }
 
     // Responsive: reset flag agar animasi bisa muncul lagi saat resize
     window.addEventListener("resize", () => {
-    scene3Animated = false;
-    draw(combined); // Atau bisa dikosongkan bar-nya jika ingin animasi ulang
+      scene3Animated = false;
+      draw(combined); // Atau bisa dikosongkan bar-nya jika ingin animasi ulang
     });
 
     // Jangan panggil draw(combined) langsung di sini!
@@ -764,12 +842,12 @@ function renderScene3() {
     // IntersectionObserver untuk scene 3
     const scene3Section = document.getElementById("scene-3");
     const observer3 = new IntersectionObserver((entries) => {
-    for (const entry of entries) {
+      for (const entry of entries) {
         if (entry.isIntersecting) {
-        animateScene3();
-        observer3.unobserve(entry.target); // animasi hanya sekali
+          animateScene3();
+          observer3.unobserve(entry.target); // animasi hanya sekali
         }
-    }
+      }
     }, { threshold: 0.18 });
     observer3.observe(scene3Section);
 
@@ -778,7 +856,7 @@ function renderScene3() {
       svg.attr("viewBox", [0, 0, width, height]);
       svg.selectAll("*").remove();
 
-      const margin = { top: 20, right: 30, bottom: 60, left: 280 };
+      const margin = { top: 5, right: 30, bottom: 40, left: 160 };
       const innerW = Math.max(10, width - margin.left - margin.right);
       const innerH = Math.max(10, height - margin.top - margin.bottom);
 
@@ -841,9 +919,9 @@ function renderScene3() {
         .duration(1500)
         .delay((d, i) => i * 80)
         .attr("x", d => x(d.value) + 8)
-        .textTween(function(d) {
+        .textTween(function (d) {
           const interpolate = d3.interpolate(0, d.value);
-          return function(t) {
+          return function (t) {
             return fmtMoney(interpolate(t));
           };
         });
@@ -993,7 +1071,7 @@ function renderScene4() {
           .transition()
           .duration(1500)
           .delay((prefix === "sleep" ? 0 : prefix === "amenity" ? 200 : 400))
-          .textTween(function() {
+          .textTween(function () {
             const i = d3.interpolate(0, finalValue);
             return t => fmtMoney(i(t));
           });
@@ -1028,7 +1106,7 @@ function renderScene5() {
       d3.select("#final-total")
         .transition()
         .duration(1500)
-        .textTween(function() {
+        .textTween(function () {
           const i = d3.interpolate(0, finalValues.total);
           return t => fmtMoney(i(t));
         });
@@ -1040,7 +1118,7 @@ function renderScene5() {
         .transition()
         .duration(1500)
         .delay(200)
-        .textTween(function() {
+        .textTween(function () {
           const i = d3.interpolate(0, finalValues.health);
           return t => `${Math.round(i(t))}%`;
         });
@@ -1052,7 +1130,7 @@ function renderScene5() {
         .transition()
         .duration(1500)
         .delay(400)
-        .textTween(function() {
+        .textTween(function () {
           const i = d3.interpolate(0, finalValues.places);
           return t => `${Math.round(i(t))}%`;
         });
